@@ -1,14 +1,29 @@
 import { useEffect, useState } from 'react';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-
 export default function Dashboard() {
   const [metrics, setMetrics] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch(`${API_URL}/dashboard`).then((r) => r.json()).then(setMetrics);
+    const fetchDashboard = async () => {
+      try {
+        const response = await fetch('/api/dashboard');
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || `HTTP ${response.status}`);
+        }
+        const data = await response.json();
+        setMetrics(data);
+      } catch (e) {
+        console.error('Dashboard fetch error:', e);
+        const message = e instanceof Error ? e.message : 'Unknown error';
+        setError(`Failed to fetch dashboard: ${message}`);
+      }
+    };
+    fetchDashboard();
   }, []);
 
+  if (error) return <main className="p-4 text-red-600">Error: {error}</main>;
   if (!metrics) return <main className="p-4">Loading...</main>;
 
   return (
