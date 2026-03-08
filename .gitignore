@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+*.db
+node_modules/
+.next/
+uploads/items/*
+!uploads/items/.gitkeep
+
+reselleros/uploads/items/*
+!reselleros/uploads/items/.gitkeep
