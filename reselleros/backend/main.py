@@ -9,10 +9,12 @@ from . import models
 from .database import Base, SessionLocal, engine
 from .routes import barcode, items, marketplace, qr, warehouse
 
+# Create DB tables
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="ResellerOS API")
 
+# CORS (required for Codespaces + Next.js frontend)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -21,6 +23,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Register routers
 app.include_router(items.router)
 app.include_router(warehouse.router)
 app.include_router(marketplace.router)
@@ -33,17 +36,35 @@ def dashboard():
     db = SessionLocal()
     try:
         total_inventory = db.query(models.Item).count()
-        items_listed = db.query(models.Item).filter(models.Item.status == "listed").count()
-        items_sold = db.query(models.Item).filter(models.Item.status == "sold").count()
-        inventory_value = db.query(func.sum(models.Item.price)).scalar() or 0
-        profit = db.query(func.sum(models.Item.profit)).scalar() or 0
+
+        items_listed = (
+            db.query(models.Item)
+            .filter(models.Item.status == "listed")
+            .count()
+        )
+
+        items_sold = (
+            db.query(models.Item)
+            .filter(models.Item.status == "sold")
+            .count()
+        )
+
+        inventory_value = (
+            db.query(func.sum(models.Item.price)).scalar() or 0
+        )
+
+        profit = (
+            db.query(func.sum(models.Item.profit)).scalar() or 0
+        )
+
         return {
             "total_inventory": total_inventory,
             "items_listed": items_listed,
             "items_sold": items_sold,
-            "inventory_value": inventory_value,
-            "profit": profit,
+            "inventory_value": float(inventory_value),
+            "profit": float(profit),
         }
+
     finally:
         db.close()
 
@@ -53,9 +74,11 @@ def health_check():
     return {"status": "ok"}
 
 
+# Background worker that processes marketplace jobs
 def worker_loop():
     while True:
         db = SessionLocal()
+
         try:
             job = (
                 db.query(models.Job)
@@ -63,22 +86,31 @@ def worker_loop():
                 .order_by(models.Job.created_at.asc())
                 .first()
             )
+
             if not job:
-                time.sleep(1)
+                time.sleep(2)
                 continue
+
             job.status = "processing"
             job.attempts += 1
             db.commit()
+
             try:
                 marketplace.process_job(db, job)
+                job.status = "completed"
                 db.commit()
+
             except Exception as exc:  # noqa: BLE001
                 job.status = "failed"
                 job.error_message = str(exc)
                 db.commit()
+
         finally:
             db.close()
 
 
-worker_thread = threading.Thread(target=worker_loop, daemon=True)
-worker_thread.start()
+# Start worker safely when FastAPI launches
+@app.on_event("startup")
+def start_worker():
+    thread = threading.Thread(target=worker_loop, daemon=True)
+    thread.start()
