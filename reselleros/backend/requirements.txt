@@ -1,0 +1,6 @@
+fastapi==0.111.1
+uvicorn==0.30.3
+sqlalchemy==2.0.31
+qrcode==7.4.2
+python-barcode==0.15.1
+pillow==10.4.0
